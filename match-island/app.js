@@ -2,10 +2,15 @@
 const E = window.MatchEngine;
 const $ = id => document.getElementById(id);
 const MODES = {
-  classic: { name: "經典三消", en: "CLASSIC MATCH", icon: "🍊", desc: "交換、連線，享受連鎖驚喜", target: 1800, moves: 24, instruction: "點選兩個相鄰物品交換，連成三個就能消除。" },
+  classic: { name: "全向三消", en: "OMNI MATCH · V2", icon: "🍊", desc: "橫直斜連線，製造你的驚喜道具", target: 4200, moves: 24, instruction: "可向八方向交換；橫、直、斜連成 3／4／5 顆，製造不同道具。" },
   blast: { name: "群組消除", en: "POP & BLAST", icon: "💥", desc: "輕點同類，一次消個痛快", target: 2400, moves: 20, instruction: "點選兩個以上相鄰的同類物品，群組越大分數越高。" },
   triple: { name: "收納三消", en: "TRIPLE TOGETHER", icon: "🧺", desc: "七格收納，考驗你的安排", target: 1800, moves: 0, instruction: "點選收入收納槽，三個同類自動消除。別讓七格裝滿！" },
-  timed: { name: "限時衝分", en: "90 SECOND RUSH", icon: "⚡", desc: "90 秒倒數，挑戰手速極限", target: 3000, moves: 0, instruction: "90 秒內達成目標！點選或滑動交換相鄰物品。" }
+  timed: { name: "限時衝分", en: "90 SECOND RUSH · V2", icon: "⚡", desc: "90 秒倒數，全向連鎖衝高分", target: 6000, moves: 0, instruction: "90 秒全向三消！3 顆炸彈、4 顆十字火箭、5 顆彩虹球。" }
+};
+const POWERUPS = {
+  bomb: { name: "小炸彈", icon: "💣", desc: "爆破周圍 3×3 範圍" },
+  rocket: { name: "十字火箭", icon: "✚", desc: "同時清除整列與整行" },
+  rainbow: { name: "彩虹球", icon: "🌈", desc: "消除全盤同類物品" }
 };
 const THEMES = [
   { name: "鮮果日常", items: ["🍊", "🍓", "🥝", "🍋", "🍇", "🫐"], names: ["橘子", "草莓", "奇異果", "檸檬", "葡萄", "藍莓"] },
@@ -44,8 +49,9 @@ function saveRecord() {
 }
 function newGame(mode = state?.mode || "classic") {
   epoch++;
+  dragStart = null; suppressClick = false;
   const config = MODES[mode];
-  state = { mode, board: E.create(), score: 0, moves: config.moves, tray: [], remaining: 90, started: false, deadline: 0, paused: false, ended: false, busy: false, selected: null, hinted: [], hammer: false, tools: { hint: 3, shuffle: 2, hammer: 3 } };
+  state = { mode, board: E.create(), score: 0, moves: config.moves, tray: [], remaining: 90, started: false, deadline: 0, paused: false, ended: false, busy: false, selected: null, hinted: [], hammer: false, created: 0, detonated: 0, maxChain: 0, tools: { hint: 3, shuffle: 2, hammer: 3 } };
   if (mode === "triple") {
     // Every item belongs to a complete triple, so the board is always solvable.
     state.board = shuffled(Array.from({ length: 60 }, (_, i) => ({ type: Math.floor(i / 3) % 6, special: null })));
@@ -63,13 +69,27 @@ function newGame(mode = state?.mode || "classic") {
     ? [["🧺", "先想再收", "留意槽內物品，優先湊齊三個。"], ["✨", "三個一組", "每組得到 90 分，清空全盤獲勝。"], ["⚒", "小槌子救援", "優先移除槽內同類物品，空槽時移除棋盤同類。"]]
     : mode === "blast"
       ? [["👆", "兩個就能消", "上下左右相連的同類一起消除。"], ["💥", "越大越划算", "群組得分為數量平方 × 10。"], ["⤨", "打開新局面", "沒有可消群組時自動洗牌。"]]
-      : [["↔", "四連變火箭", "連成四個，獲得整排消除。"], ["🌈", "五連有驚喜", "連成五個，獲得同色全消。"], ["✦", "連鎖加倍", "掉落引發的連鎖，得分倍率持續增加。"]];
+      : [["💣", "3 顆 → 小炸彈", "手動連成三顆，獲得 3×3 爆破。"], ["✚", "4 顆 → 十字火箭", "手動連成四顆，同時清除整列與整行。"], ["🌈", "5 顆 → 彩虹球", "手動連成五顆以上，全盤同色消除。"], ["✦", "特殊＋特殊＝大驚喜", "交換兩顆道具，組合出更強的爆破。"]];
   $("guide").innerHTML = notes.map(([icon, title, desc]) => `<div class="guide-row"><span>${icon}</span><div><b>${title}</b>${desc}</div></div>`).join("");
   render();
 }
 function render() {
   const t = THEMES[theme];
-  $("board").innerHTML = state.board.map((tile, i) => `<button class="tile${!tile ? " empty" : ""}${state.selected === i ? " selected" : ""}${state.hinted.includes(i) ? " hinted" : ""}${tile?.special ? ` special ${tile.special}` : ""}" style="--tile-bg:${tile ? COLORS[tile.type] : "transparent"}" data-index="${i}" aria-label="第 ${Math.floor(i / 8) + 1} 列，第 ${i % 8 + 1} 格${tile ? `，${t.names[tile.type]}${tile.special === "rocket" ? "火箭" : tile.special === "rainbow" ? "彩虹" : ""}` : "，空格"}" ${!tile || state.paused || state.ended || state.busy ? "disabled" : ""}>${tile ? tile.special === "rainbow" ? "🌈" : t.items[tile.type] : ""}</button>`).join("");
+  const focus = document.activeElement?.closest("#board [data-index]")?.dataset.index;
+  const preview = state.selected !== null && state.board[state.selected]?.special ? E.expand(state.board, [state.selected]) : [];
+  $("board").innerHTML = state.board.map((tile, i) => {
+    const power = POWERUPS[tile?.special];
+    return `<button class="tile${!tile ? " empty" : ""}${state.selected === i ? " selected" : ""}${state.hinted.includes(i) ? " hinted" : ""}${preview.includes(i) ? " in-range" : ""}${power ? ` special ${tile.special}` : ""}" style="--tile-bg:${tile ? COLORS[tile.type] : "transparent"}" data-index="${i}" aria-label="第 ${Math.floor(i / 8) + 1} 列，第 ${i % 8 + 1} 格${tile ? `，${t.names[tile.type]}${power ? `，${power.name}，${power.desc}` : ""}` : "，空格"}" ${!tile || state.paused || state.ended || state.busy ? "disabled" : ""}>${tile ? `<span class="tile-object">${tile.special === "rainbow" ? "🌈" : t.items[tile.type]}</span>${power ? `<span class="power-badge" aria-hidden="true">${power.icon}</span>` : ""}` : ""}</button>`;
+  }).join("");
+  if (focus !== undefined && !$("board").children[focus]?.disabled) $("board").children[focus]?.focus({ preventScroll: true });
+  $("power-preview").hidden = !preview.length || state.paused || state.ended || state.busy;
+  if (preview.length) {
+    const tile = state.board[state.selected], power = POWERUPS[tile.special];
+    $("preview-name").textContent = `${power.icon} ${power.name}`;
+    $("preview-detail").textContent = `${power.desc} · 含連鎖預計 ${preview.length} 格`;
+  }
+  $("power-legend").hidden = !["classic", "timed"].includes(state.mode);
+  $("round-summary").hidden = !["classic", "timed"].includes(state.mode);
   $("board").classList.toggle("hammer-mode", state.hammer);
   $("tray").hidden = state.mode !== "triple";
   $("tray").innerHTML = Array.from({ length: 7 }, (_, i) => `<span>${state.tray[i] !== undefined ? t.items[state.tray[i]] : ""}</span>`).join("");
@@ -85,6 +105,9 @@ function updateStats() {
     $(tool).disabled = state.ended || state.paused || state.busy || !state.tools[tool];
   }
   $("hammer").classList.toggle("armed", state.hammer);
+  $("made-count").textContent = state.created;
+  $("chain-count").textContent = state.maxChain;
+  $("blast-count").textContent = state.detonated;
   $("pause").disabled = state.ended;
   $("pause").textContent = state.paused ? "▷" : "Ⅱ";
   $("pause").setAttribute("aria-label", state.paused ? "繼續遊戲" : "暫停遊戲");
@@ -103,7 +126,7 @@ function showOverlay(icon, title, text, label) {
 function endGame(won) {
   state.ended = true; state.busy = false; state.selected = null;
   saveRecord(); render();
-  showOverlay(won ? "🏝️" : "🌱", won ? "太棒了，小島任務完成！" : "休息一下，再挑戰一次。", `本局得到 ${format(state.score)} 分\n${won ? "你又收集了一份好心情。" : state.mode === "triple" ? "收納槽滿了。下次試著先湊齊槽內的物品！" : "每一局都是新的可能，你一定能找到更好的連鎖。"}`, "再來一局 →");
+  showOverlay(won ? "🏝️" : "🌱", won ? "太棒了，小島任務完成！" : "休息一下，再挑戰一次。", `本局得到 ${format(state.score)} 分\n${state.created ? `製造 ${state.created} 顆道具 · 最高 ${state.maxChain} 連鎖\n` : ""}${won ? "你又收集了一份好心情。" : state.mode === "triple" ? "收納槽滿了。下次試著先湊齊槽內的物品！" : "每一局都是新的可能，你一定能找到更好的連鎖。"}`, "再來一局 →");
 }
 function checkEnd() {
   if (state.ended) return true;
@@ -114,49 +137,46 @@ function checkEnd() {
   else if ((state.mode !== "timed" && state.moves <= 0) || (state.mode === "timed" && state.remaining <= 0)) { endGame(false); return true; }
   return false;
 }
-function flourish(n, combo) {
-  if (combo > 1 || n >= 5) {
-    $("combo").textContent = combo > 1 ? `連鎖 ×${combo} !` : `${n} 個一起消！`;
+function flourish(n, combo, label = "") {
+  if (label || combo > 1 || n >= 5) {
+    $("combo").textContent = label || (combo > 1 ? `連鎖 ×${combo} !` : `${n} 個一起消！`);
     $("combo").classList.remove("show"); void $("combo").offsetWidth; $("combo").classList.add("show");
   }
   beep(combo);
 }
 function expandSpecials(indices) {
-  const cells = new Set(indices), queue = [...cells];
-  for (let p = 0; p < queue.length; p++) {
-    const i = queue[p], tile = state.board[i];
-    const more = tile?.special === "rocket" ? Array.from({ length: 8 }, (_, c) => Math.floor(i / 8) * 8 + c)
-      : tile?.special === "rainbow" ? state.board.flatMap((t, j) => t?.type === tile.type ? [j] : []) : [];
-    more.forEach(j => { if (!cells.has(j)) { cells.add(j); queue.push(j); } });
-  }
-  return [...cells];
+  return E.expand(state.board, indices);
 }
-async function clearCells(cells, combo, token, creation = null, blast = false) {
-  const expanded = expandSpecials(cells);
+async function clearCells(cells, combo, token, creations = [], blast = false, label = "", resolved = false) {
+  const expanded = resolved ? cells : expandSpecials(cells);
   state.score += blast ? expanded.length ** 2 * 10 : expanded.length * 30 * combo;
+  state.maxChain = Math.max(state.maxChain, combo);
+  state.detonated += expanded.filter(i => state.board[i]?.special).length;
   expanded.forEach(i => $("board").children[i]?.classList.add("clearing"));
-  flourish(expanded.length, combo); saveRecord(); updateStats();
+  flourish(expanded.length, combo, label); saveRecord(); updateStats();
   await wait(190);
   while (token === epoch && state.paused && !state.ended) await wait(100);
   if (token !== epoch || state.ended) return false;
   expanded.forEach(i => state.board[i] = null);
-  if (creation) state.board[creation.i] = { type: creation.type, special: creation.special };
+  for (const creation of creations) state.board[creation.i] = { type: creation.type, special: creation.special };
+  state.created += creations.length;
   E.refill(state.board); render();
   await wait(120);
   while (token === epoch && state.paused && !state.ended) await wait(100);
   return token === epoch && !state.ended;
 }
-async function settle(token, initial = null, preferred = null) {
+async function settle(token, initial = null, preferred = null, label = "", resolved = false) {
   let combo = 1;
   if (initial) {
-    if (!await clearCells(initial, combo++, token, null, state.mode === "blast")) return;
+    if (!await clearCells(initial, combo++, token, [], state.mode === "blast", label, resolved)) return;
   }
   if (state.mode !== "blast") {
     let match = E.matches(state.board);
     while (match.cells.length) {
-      const run = match.runs.find(r => r.length >= 4);
-      const creation = run ? { i: preferred !== null && run.includes(preferred) ? preferred : run[Math.floor(run.length / 2)], type: state.board[run[0]].type, special: run.length >= 5 ? "rainbow" : "rocket" } : null;
-      if (!await clearCells(match.cells, combo++, token, creation)) return;
+      // Reward intentional swaps, not automatic cascades, to keep tools strategic.
+      const creations = preferred !== null ? E.rewards(state.board, match.runs, preferred) : [];
+      const rewardLabel = creations.length ? creations.map(c => `${POWERUPS[c.special].icon} ${POWERUPS[c.special].name}生成！`).join(" ") : "";
+      if (!await clearCells(match.cells, combo++, token, creations, false, rewardLabel)) return;
       match = E.matches(state.board); preferred = null;
     }
   }
@@ -169,11 +189,22 @@ async function settle(token, initial = null, preferred = null) {
   }
 }
 async function swap(a, b) {
+  if (state.busy || state.paused || state.ended || !state.board[a] || !state.board[b]) return;
   if (!E.adjacent(a, b)) { state.selected = b; render(); return; }
   state.busy = true; state.selected = null; state.hinted = []; startClock();
   const token = epoch;
   [state.board[a], state.board[b]] = [state.board[b], state.board[a]];
   render();
+  const combined = E.combination(state.board, a, b);
+  const specialAt = state.board[a].special ? a : state.board[b].special ? b : null;
+  if (specialAt !== null) {
+    if (state.mode !== "timed") state.moves--;
+    const other = specialAt === a ? b : a;
+    if (!combined && state.board[specialAt].special === "rainbow") state.board[specialAt].type = state.board[other].type;
+    const seeds = combined?.cells || E.effect(state.board, specialAt, state.board[other].type);
+    await settle(token, seeds, null, combined?.label || `${POWERUPS[state.board[specialAt].special].name}發動！`, Boolean(combined));
+    return;
+  }
   if (!E.matches(state.board).cells.length) {
     $("status").textContent = "這次沒有連成三個，已換回；不扣步數。";
     await wait(220);
@@ -206,15 +237,26 @@ async function activate(i) {
     state.busy = true; render(); await settle(epoch, [i]); return;
   }
   if (state.mode === "triple") { collect(i); return; }
-  if (state.board[i].special) { state.selected = null; state.busy = true; render(); await settle(epoch, [i]); return; }
   if (state.mode === "blast") {
     const group = E.group(state.board, i);
     if (group.length < 2) { $("status").textContent = "找找相連的同類物品，至少兩個才能一起消除。"; return; }
     state.moves--; state.busy = true; render(); await settle(epoch, group); return;
   }
-  if (state.selected === i) { state.selected = null; render(); }
-  else if (state.selected === null) { state.selected = i; render(); }
-  else await swap(state.selected, i);
+  if (state.selected === i) {
+    if (state.board[i].special) await detonate();
+    else { state.selected = null; render(); }
+  } else if (state.selected !== null && E.adjacent(state.selected, i)) await swap(state.selected, i);
+  else {
+    state.selected = i; render();
+    if (state.board[i].special) $("status").textContent = "亮起的是爆破範圍。再點同一顆或按「引爆」；也可交換另一顆道具組合。";
+  }
+}
+async function detonate() {
+  if (state.busy || state.paused || state.ended || state.selected === null) return;
+  const i = state.selected, power = POWERUPS[state.board[i]?.special];
+  if (!power) return;
+  startClock(); state.selected = null; state.hinted = []; state.busy = true; render();
+  await settle(epoch, [i], null, `${power.name}發動！`);
 }
 function togglePause() {
   if (state.ended) return;
@@ -277,7 +319,8 @@ $("board").onpointerup = event => {
   if (!["classic", "timed"].includes(state.mode) || state.hammer || state.busy || state.paused || state.ended) return;
   const dx = event.clientX - start.x, dy = event.clientY - start.y;
   if (Math.max(Math.abs(dx), Math.abs(dy)) < 18) return;
-  const next = start.i + (Math.abs(dx) > Math.abs(dy) ? Math.sign(dx) : Math.sign(dy) * 8);
+  const diagonal = Math.min(Math.abs(dx), Math.abs(dy)) > Math.max(Math.abs(dx), Math.abs(dy)) * .45;
+  const next = start.i + (diagonal ? Math.sign(dx) + Math.sign(dy) * 8 : Math.abs(dx) > Math.abs(dy) ? Math.sign(dx) : Math.sign(dy) * 8);
   if (E.adjacent(start.i, next)) { suppressClick = true; swap(start.i, next); }
 };
 $("board").onpointercancel = () => { dragStart = null; };
@@ -289,6 +332,8 @@ $("board").onkeydown = event => {
   if (E.adjacent(i, next)) $("board").children[next]?.focus();
 };
 for (const tool of ["hint", "shuffle", "hammer"]) $(tool).onclick = () => useTool(tool);
+$("detonate").onclick = detonate;
+$("cancel-power").onclick = () => { state.selected = null; render(); $("status").textContent = MODES[state.mode].instruction; };
 $("pause").onclick = togglePause;
 $("restart").onclick = () => { if (!state.started || state.ended || confirm("確定重新開始這一局？")) newGame(); };
 $("overlay-action").onclick = () => state.ended ? newGame() : togglePause();

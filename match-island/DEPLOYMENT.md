@@ -8,6 +8,7 @@
 - 玩家回報與建議：https://github.com/lepard2828/match-island/issues
 - 正式分支：`main`；Pages 來源：GitHub Actions；網站使用 HTTPS。
 - 首次部署已成功，雲端 Chromium 測試通過。
+- 第二版功能與驗收範圍見 `README.md`；每版變更記錄於 `CHANGELOG.md`。正式部署及測試結果以 Actions 的執行紀錄為準。
 
 以下首次建立步驟保留作為重建及備援參考，不需要重複建立另一個同名專案。
 
