@@ -1,5 +1,16 @@
 # 消消小島：公開部署與持續改進
 
+## 目前上線狀態
+
+- 正式網站：https://lepard2828.github.io/match-island/
+- 公開儲存庫：https://github.com/lepard2828/match-island
+- 自動部署與測試：https://github.com/lepard2828/match-island/actions
+- 玩家回報與建議：https://github.com/lepard2828/match-island/issues
+- 正式分支：`main`；Pages 來源：GitHub Actions；網站使用 HTTPS。
+- 首次部署已成功，雲端 Chromium 測試通過。
+
+以下首次建立步驟保留作為重建及備援參考，不需要重複建立另一個同名專案。
+
 ## 架構與目標
 
 玩家瀏覽器 → HTTPS 公開網址 → 雲端靜態網站主機。

@@ -4,6 +4,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
 from tempfile import gettempdir
+import os
 
 from playwright.sync_api import sync_playwright
 
@@ -26,7 +27,7 @@ def run():
             errors = []
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.on("dialog", lambda dialog: dialog.accept())
-            page.goto(f"http://127.0.0.1:{server.server_port}")
+            page.goto(os.environ.get("MATCH_ISLAND_URL") or f"http://127.0.0.1:{server.server_port}")
             page.wait_for_selector(".tile")
             assert page.locator(".tile").count() == 64
             page.evaluate("""() => {

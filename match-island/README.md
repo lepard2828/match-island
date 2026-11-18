@@ -1,0 +1,78 @@
+# 消消小島 / Match Island
+
+原創繁體中文消除網頁遊戲，以休閒消除遊戲集合為靈感，不複製參考網站的素材或程式碼。
+原生 HTML、CSS、JavaScript，免建置、無後端、無登入或付費功能。
+
+## 公開遊玩
+
+- 正式網址：https://lepard2828.github.io/match-island/
+- 原始碼：https://github.com/lepard2828/match-island
+- 問題與建議：https://github.com/lepard2828/match-island/issues
+
+由 GitHub Pages 雲端託管，不需要開發者的電腦保持開機。最高分留在各玩家自己的瀏覽器。
+
+## 開始遊玩
+
+直接開啟本資料夾的 `index.html`，或在專案根目錄執行：
+
+```powershell
+python -m http.server 8080 --bind 127.0.0.1
+```
+
+接著前往 `http://127.0.0.1:8080/match-island/`。
+原本專案的選戰遊戲不受影響。
+
+## 玩法設計
+
+| 模式 | 操作 | 勝利條件 | 限制 |
+| --- | --- | --- | --- |
+| 經典三消 | 點兩格或滑動交換相鄰物品，橫直三連消除 | 1,800 分 | 24 步 |
+| 群組消除 | 點擊至少兩個相鄰同類，一起消除 | 2,400 分 | 20 步 |
+| 收納三消 | 收進七格槽，三個同類自動移除 | 清空 60 件物品及收納槽 | 七格滿即失敗 |
+| 限時衝分 | 與經典三消相同，首個操作後開始計時 | 3,000 分 | 90 秒 |
+
+- 經典與限時模式：四連生成橫向火箭；五連生成彩虹，清除同類物品。點選特殊物品可直接發動，不耗步數；特殊物品也會被其他消除連鎖引爆。
+- 三消基礎得分為每格 30 分，連鎖倍率遞增。群組得分為群組大小平方乘以 10；收納每組 90 分。
+- 每局三次提示、兩次洗牌、三次小槌子。收納模式的小槌子移除槽內第一種類及棋盤同類，若槽為空則移除選取種類；其他模式直接消一格。
+- 非收納模式無可行操作時免費重建棋盤。洗牌道具同樣會重建棋盤（收納模式則只重排位置）。
+- 水果、甜點、海洋、花園、動物五款主題可隨時切換，不改變遊戲狀態。
+- 音效預設關閉，可自行開啟。支援滑動、點選、鍵盤方向鍵導航與 Enter 選取。
+- 支援暫停；切到其他分頁會自動暫停。切換模式或重新開始會清除本局。
+
+## 儲存與離線
+
+僅儲存各模式最高分，不儲存未完成棋局。紀錄使用瀏覽器 localStorage；不同網址、瀏覽器或清除資料後不共用。無痕模式或禁用儲存時仍能遊玩。
+
+Google Fonts 為選用線上字型；離線時回退到裝置字型。棋盤採用系統 emoji，外觀依作業系統而異。無其他外部資源依賴。
+
+## 測試
+
+```powershell
+python -m pip install -r match-island/requirements-test.txt
+python -m playwright install chromium --only-shell
+python match-island/test_browser.py
+```
+
+測試包含 200 個隨機棋盤、初盤無連線、可行提示、重力補滿、有效與無效交換、特殊物品、非同步切局隔離、收納過關及失敗、群組計分、暫停與倒數、最高分儲存、七種螢幕寬度無水平溢出。
+
+## 部署
+
+已啟用 GitHub Pages 自動測試與部署工作流程，以及 Cloudflare Pages 手動上傳用的打包工具。完整操作與持續改進流程見 [部署文件](https://github.com/lepard2828/match-island/blob/main/match-island/DEPLOYMENT.md)。
+
+```powershell
+python match-island/build_release.py
+```
+
+產出 `match-island/dist/site/` 與 `match-island/dist/match-island.zip`，只包含四個公開網站檔案。推送正式分支後，測試通過才更新公開網站；Pull Request 只測試，不發布。
+
+現有根目錄 `public_server.py` 為舊遊戲專用白名單伺服器，不會公開本遊戲。
+
+這是一版已公開的單人網頁遊戲，目前沒有關卡地圖、排行榜伺服器、付費商店或多人連線。
+
+驗證公開網站可設定測試網址後執行同一套測試：
+
+```powershell
+$env:MATCH_ISLAND_URL = "https://lepard2828.github.io/match-island/"
+python match-island/test_browser.py
+Remove-Item Env:MATCH_ISLAND_URL
+```
