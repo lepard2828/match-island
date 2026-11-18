@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f4ed">
+  <title>消消小島 · Match Island</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="engine.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="header">
+    <a class="brand" href="./"><span class="brand-icon">✿</span><span>消消小島<small>MATCH ISLAND</small></span></a>
+    <nav><a href="#play">開始遊玩</a><a href="#modes">探索玩法</a><button id="help">玩法指南 ↗</button></nav>
+    <span class="online"><i></i> 隨時來一局</span>
+  </header>
+  <main>
+    <section class="intro">
+      <div><span class="eyebrow">A LITTLE MATCH. A LOT OF JOY.</span><h1>把煩惱消掉，<br>把<span>快樂連起來。</span><svg viewBox="0 0 330 16" aria-hidden="true"><path d="M4 10 Q130 -4 325 9"/></svg></h1><p>歡迎來到你的小小快樂基地。<br>換個玩法、換個心情，每一次消除都有新驚喜。</p><div class="intro-tags"><span>✦ 四種玩法</span><span>✦ 五款主題</span><span>✦ 不用下載</span></div></div>
+      <div class="island-art" aria-hidden="true"><span class="orbit o1">✦</span><span class="orbit o2">✧</span><div class="art-sticker">GOOD VIBES<br><b>ONLY!</b></div><div class="art-tile t1">🍊</div><div class="art-tile t2">🍓</div><div class="art-tile t3">🥝</div><div class="art-tile t4">🍋</div><div class="art-tile t5">🍇</div><div class="art-caption">你的下一個小確幸，在這裡。</div></div>
+    </section>
+    <section id="play" class="play-section">
+      <div class="section-title"><div><span class="eyebrow">LET'S PLAY</span><h2>今天，想怎麼消？</h2></div><span class="section-note">選個模式，馬上開始 ↓</span></div>
+      <div class="game-layout">
+        <aside class="settings">
+          <div class="label">01 <span>選擇玩法</span></div>
+          <div id="mode-list"></div>
+          <div class="label theme-label">02 <span>換個主題</span></div>
+          <div id="themes" class="themes"></div>
+          <div class="personal"><span>✧ 你的小島紀錄</span><strong id="best">0</strong><small>目前模式最高分 · 自動儲存</small></div>
+        </aside>
+        <section class="game-panel" aria-label="消除遊戲">
+          <div class="game-top"><div><span class="mini-label" id="mode-eyebrow">CLASSIC MATCH</span><h3 id="game-title">經典三消</h3></div><div class="game-controls"><button id="sound" aria-label="開啟音效" title="音效">♫</button><button id="pause" aria-label="暫停遊戲" title="暫停">Ⅱ</button><button id="restart" aria-label="重新開始" title="重新開始">↻</button></div></div>
+          <div class="stats"><div><span>目前得分</span><strong id="score">0</strong></div><div><span id="resource-label">剩餘步數</span><strong id="resource">24</strong></div><div><span>本局目標</span><strong id="target">1,800</strong></div></div>
+          <div class="goal-track"><div id="goal-progress"></div></div>
+          <div class="board-wrap"><div id="board" class="board" aria-label="消除棋盤"></div><div id="overlay" class="overlay" hidden><span id="overlay-icon">✦</span><h3 id="overlay-title"></h3><p id="overlay-text"></p><button id="overlay-action" class="primary">繼續遊戲 →</button></div><div id="combo" class="combo" aria-hidden="true"></div></div>
+          <div id="tray" class="tray" hidden aria-label="收納槽"></div>
+          <div class="board-caption"><span class="status-dot"></span><span id="status" role="status" aria-live="polite">點選兩個相鄰物品交換，連成三個就能消除。</span></div>
+          <div class="tools"><button id="hint"><span>☀</span>提示<small id="hint-count">3</small></button><button id="shuffle"><span>⤨</span>洗牌<small id="shuffle-count">2</small></button><button id="hammer"><span>⚒</span>小槌子<small id="hammer-count">3</small></button></div>
+        </section>
+        <aside class="right-column">
+          <article class="tip-card"><span class="eyebrow">LITTLE GOALS, BIG SMILES</span><div class="sun">☀</div><h3>不趕時間，<br>只收集好心情。</h3><p>每一小步，都是新可能。<br>準備好創造你的連鎖驚喜了嗎？</p><span class="handwritten">enjoy the little things.</span></article>
+          <article class="guide-card"><span class="eyebrow">ISLAND NOTES</span><h3 id="guide-title">小島玩家筆記</h3><div id="guide"></div></article>
+          <div class="save-note">✓ 不用登入，紀錄留在這個瀏覽器<br><span id="save-note">免費遊玩 · 無體力限制 · 無廣告</span></div>
+        </aside>
+      </div>
+    </section>
+    <section id="modes" class="discovery"><div class="section-title"><div><span class="eyebrow">MORE WAYS TO SMILE</span><h2>一座小島，不只一種樂趣。</h2></div><span class="section-note">找到你的命定玩法</span></div><div id="discovery-cards" class="discovery-cards"></div></section>
+  </main>
+  <footer><a class="footer-brand" href="./">✿ 消消小島</a><span>給日常一點空白，給快樂一點空間。</span><small>原創網頁遊戲 · MATCH ISLAND</small></footer>
+  <dialog id="help-dialog"><button id="close-help" class="close" aria-label="關閉說明">✕</button><span class="eyebrow">WELCOME TO YOUR ISLAND</span><h2>一分鐘，認識小島。</h2><p>經典三消：點選或滑動交換相鄰物品；三個以上同色橫排或直排會消除。四連生成橫向火箭，五連生成彩虹；點它們即可發動，不耗步數。</p><p>群組消除：點選兩個以上上下左右相連的同類物品；一次消得越多，加分越高。</p><p>收納三消：點選物品收入七格收納槽，湊齊三個同類就消除。七格滿時失敗；清空棋盤即可過關。</p><p>限時衝分：三消規則，90 秒內達成目標。可暫停，切換分頁也會自動暫停。</p><p>提示標出可行操作；洗牌重排棋盤；小槌子直接消除一格。每局道具數量獨立，無需付費。切換模式會開始新局，切換主題不影響進度。</p><button id="help-play" class="primary">知道了，來玩吧 →</button></dialog>
+</body>
+</html>
