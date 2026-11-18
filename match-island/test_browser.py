@@ -91,6 +91,23 @@ def run():
                  if (pair[0]==='rainbow' && pair[1]!=='rainbow' && combo.cells.includes(63)) throw Error('rainbow fusion wrong color');
                  if (pair.every(k=>k==='rainbow') && combo.cells.length!==64) throw Error('double rainbow');
                }
+             }""")
+            page.evaluate("""() => {
+              window.originalTiles=[...document.querySelectorAll('.tile')];
+              const observer=new MutationObserver(()=>{});
+              observer.observe(document.getElementById('board'),{childList:true,subtree:true});
+              for(let i=0;i<80;i++){state.selected=i%64;render();}
+              if(observer.takeRecords().length)throw Error('selection rebuilds tile content');
+              observer.disconnect(); state.selected=null; render();
+              const board=E.create(), original=new Map(board.map((tile,i)=>[tile,i]));
+              [8,32,56,63].forEach(i=>board[i]=null);
+              const movements=[]; E.refill(board,Math.random,movements);
+              const byCell=new Map(movements.map(m=>[m.i,m.rows]));
+              board.forEach((tile,i)=>{
+                if(!original.has(tile))return;
+                const from=original.get(tile), rows=(i-from)/8;
+                if(rows<0 || (byCell.get(i)||0)!==rows)throw Error('gravity animation disagrees with board');
+              });
             }""")
             page.screenshot(path=str(output / "desktop.png"), full_page=True)
             for width in (320, 375, 390, 680, 768, 1024, 1440):
@@ -223,6 +240,23 @@ def run():
             assert page.evaluate("JSON.stringify(state.board)") == board_before
             page.locator("#overlay-action").click()
             page.wait_for_function("!state.busy")
+            # Pause an animation that has actually started, not just its setup.
+            page.evaluate("() => { newGame('classic'); state.board[0].special='bomb'; state.selected=0; detonate(); }")
+            page.wait_for_function("state.busy && document.getElementById('board').getAnimations({subtree:true}).length>0")
+            page.evaluate("togglePause()")
+            assert page.evaluate("document.getElementById('board').getAnimations({subtree:true}).every(a=>a.playState==='paused')")
+            page.locator("#overlay-action").click()
+            page.wait_for_function("!state.busy")
+            page.evaluate("() => { newGame('classic'); state.board[0].special='rocket'; state.selected=0; detonate(); }")
+            page.wait_for_function("state.busy && document.getElementById('board').getAnimations({subtree:true}).length>0")
+            page.evaluate("newGame('triple')")
+            assert page.evaluate("document.getElementById('board').getAnimations({subtree:true}).length===0 && !state.busy")
+            # Reduced-motion users need neither animation delays nor flashing labels.
+            page.emulate_media(reduced_motion="reduce")
+            page.evaluate("newGame('classic'); state.board[0].special='rainbow'; state.board[1].special='rainbow'; swap(0,1)")
+            page.wait_for_function("!state.busy")
+            assert page.evaluate("document.getElementById('board').getAnimations({subtree:true}).length===0 && state.score>=1920")
+            page.emulate_media(reduced_motion="no-preference")
             # Switching games during animation must not corrupt a new board.
             page.evaluate("newGame('classic'); state.board[0].special = 'rocket'; state.selected=0; detonate(); newGame('triple')")
             page.wait_for_timeout(400)
@@ -264,6 +298,21 @@ def run():
             assert page.evaluate("state.ended")
             page.evaluate("newGame('classic'); state.score = MODES.classic.target; checkEnd()")
             assert page.locator("#overlay-title").inner_text() == "太棒了，小島任務完成！"
+            assert page.evaluate("window.originalTiles.every((node,i)=>node===document.getElementById('board').children[i])")
+            # Coalesce storage writes, but persist synchronously when leaving the page.
+            page.evaluate("""() => {
+              newGame('classic'); flushRecords();
+              const original=Storage.prototype.setItem;
+              let writes=0;
+              Storage.prototype.setItem=function(...args){writes++; return original.apply(this,args);};
+              try{
+                const base=Number(records.classic)||0;
+                for(let i=1;i<=10;i++){state.score=base+i; saveRecord();}
+                if(writes!==0)throw Error('synchronous storage on each cascade');
+                window.dispatchEvent(new Event('pagehide'));
+                if(writes!==1)throw Error('batched save not flushed on pagehide');
+              }finally{Storage.prototype.setItem=original;}
+            }""")
             page.reload()
             assert page.evaluate("Number(records.classic) >= MODES.classic.target")
             assert not errors, errors

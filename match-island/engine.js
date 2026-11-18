@@ -2,27 +2,49 @@
 (function (root) {
   const SIZE = 8;
   const DIRECTIONS = [[0, 1], [1, 0], [1, 1], [1, -1]];
-  const neighbors = i => [i % SIZE > 0 ? i - 1 : -1, i % SIZE < SIZE - 1 ? i + 1 : -1, i - SIZE, i + SIZE].filter(n => n >= 0 && n < SIZE * SIZE);
   const inside = (r, c) => r >= 0 && r < SIZE && c >= 0 && c < SIZE;
   const adjacent = (a, b) => Number.isInteger(a) && Number.isInteger(b) && a >= 0 && b >= 0 && a < SIZE * SIZE && b < SIZE * SIZE && a !== b && Math.abs(Math.floor(a / SIZE) - Math.floor(b / SIZE)) <= 1 && Math.abs(a % SIZE - b % SIZE) <= 1;
-  const swapNeighbors = i => Array.from({ length: SIZE * SIZE }, (_, j) => j).filter(j => adjacent(i, j));
+  const orthogonal = [], surrounding = [], lines = [];
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    orthogonal.push(Object.freeze([i % SIZE > 0 ? i - 1 : -1, i % SIZE < SIZE - 1 ? i + 1 : -1, i - SIZE, i + SIZE].filter(n => n >= 0 && n < SIZE * SIZE)));
+    surrounding.push(Object.freeze(Array.from({ length: SIZE * SIZE }, (_, j) => j).filter(j => adjacent(i, j))));
+  }
+  for (const [dr, dc] of DIRECTIONS) {
+    for (let start = 0; start < SIZE * SIZE; start++) {
+      const sr = Math.floor(start / SIZE), sc = start % SIZE;
+      if (inside(sr - dr, sc - dc)) continue;
+      const line = [];
+      for (let r = sr, c = sc; inside(r, c); r += dr, c += dc) line.push(r * SIZE + c);
+      if (line.length >= 3) lines.push(line);
+    }
+  }
+  const neighbors = i => orthogonal[i] || [];
+  const swapNeighbors = i => surrounding[i] || [];
   function matches(board) {
     const cells = new Set(), runs = [];
-    for (const [dr, dc] of DIRECTIONS) {
-      for (let start = 0; start < SIZE * SIZE; start++) {
-        const sr = Math.floor(start / SIZE), sc = start % SIZE;
-        if (inside(sr - dr, sc - dc)) continue;
-        let run = [];
-        const flush = () => { if (run.length >= 3) { runs.push([...run]); run.forEach(i => cells.add(i)); } };
-        for (let r = sr, c = sc; inside(r, c); r += dr, c += dc) {
-          const i = r * SIZE + c, tile = board[i];
-          if (tile && run.length && tile.type === board[run[0]].type) run.push(i);
-          else { flush(); run = tile ? [i] : []; }
+    for (const line of lines) {
+      let run = [];
+      for (let p = 0; p <= line.length; p++) {
+        const i = line[p], tile = board[i];
+        if (tile && run.length && tile.type === board[run[0]].type) run.push(i);
+        else {
+          if (run.length >= 3) { runs.push(run); run.forEach(j => cells.add(j)); }
+          run = tile ? [i] : [];
         }
-        flush();
       }
     }
     return { cells: [...cells], runs };
+  }
+  function matchedAt(board, i) {
+    if (!board[i]) return false;
+    const row = Math.floor(i / SIZE), col = i % SIZE, type = board[i].type;
+    return DIRECTIONS.some(([dr, dc]) => {
+      let count = 1;
+      for (const sign of [-1, 1]) {
+        for (let r = row + dr * sign, c = col + dc * sign; inside(r, c) && board[r * SIZE + c]?.type === type; r += dr * sign, c += dc * sign) count++;
+      }
+      return count >= 3;
+    });
   }
   function rewards(board, runs, preferred) {
     // Intersecting lines form one reward group; the longest line wins.
@@ -60,6 +82,7 @@
   function expand(board, indices) {
     const cells = new Set(indices.filter(i => i >= 0 && i < SIZE * SIZE)), queue = [...cells];
     for (let p = 0; p < queue.length; p++) {
+      if (!board[queue[p]]?.special) continue;
       for (const i of effect(board, queue[p])) if (!cells.has(i)) { cells.add(i); queue.push(i); }
     }
     return [...cells].sort((a, b) => a - b);
@@ -98,8 +121,9 @@
       if (mode === "blast") { const g = group(board, i); if (g.length > 1) return g; }
       else {
         for (const j of swapNeighbors(i).filter(j => j > i)) {
+          if (board[i]?.type === board[j]?.type) continue;
           [board[i], board[j]] = [board[j], board[i]];
-          const valid = matches(board).cells.length > 0;
+          const valid = matchedAt(board, i) || matchedAt(board, j);
           [board[i], board[j]] = [board[j], board[i]];
           if (valid) return [i, j];
         }
@@ -123,15 +147,20 @@
     } while (!move(board, "classic").length);
     return board;
   }
-  function refill(board, random = Math.random) {
+  function refill(board, random = Math.random, motions = null) {
     for (let c = 0; c < SIZE; c++) {
       const col = [];
-      for (let r = SIZE - 1; r >= 0; r--) if (board[r * SIZE + c]) col.push(board[r * SIZE + c]);
-      for (let r = SIZE - 1; r >= 0; r--) board[r * SIZE + c] = col[SIZE - 1 - r] || { type: Math.floor(random() * 6), special: null };
+      for (let r = SIZE - 1; r >= 0; r--) if (board[r * SIZE + c]) col.push({ tile: board[r * SIZE + c], row: r });
+      for (let r = SIZE - 1; r >= 0; r--) {
+        const entry = col[SIZE - 1 - r], i = r * SIZE + c;
+        board[i] = entry?.tile || { type: Math.floor(random() * 6), special: null };
+        const distance = entry ? r - entry.row : SIZE - col.length;
+        if (motions && distance) motions.push({ i, rows: distance });
+      }
     }
     return board;
   }
-   const api = { SIZE, neighbors, swapNeighbors, adjacent, matches, rewards, area, effect, expand, combination, group, move, create, refill };
+  const api = { SIZE, neighbors, swapNeighbors, adjacent, matches, rewards, area, effect, expand, combination, group, move, create, refill };
   root.MatchEngine = api;
   if (typeof module !== "undefined") module.exports = api;
 })(typeof window !== "undefined" ? window : globalThis);

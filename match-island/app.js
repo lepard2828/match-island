@@ -1,6 +1,14 @@
 "use strict";
 const E = window.MatchEngine;
-const $ = id => document.getElementById(id);
+const elements = new Map();
+const $ = id => {
+  if (!elements.has(id)) elements.set(id, document.getElementById(id));
+  return elements.get(id);
+};
+const setText = (node, value) => { const text = String(value); if (node.textContent !== text) node.textContent = text; };
+const setDisabled = (node, value) => { if (node.disabled !== value) node.disabled = value; };
+const setClass = (node, name, value) => { if (node.classList.contains(name) !== value) node.classList.toggle(name, value); };
+const reducedMotion = matchMedia("(prefers-reduced-motion: reduce)");
 const MODES = {
   classic: { name: "全向三消", en: "OMNI MATCH · V2", icon: "🍊", desc: "橫直斜連線，製造你的驚喜道具", target: 4200, moves: 24, instruction: "可向八方向交換；橫、直、斜連成 3／4／5 顆，製造不同道具。" },
   blast: { name: "群組消除", en: "POP & BLAST", icon: "💥", desc: "輕點同類，一次消個痛快", target: 2400, moves: 20, instruction: "點選兩個以上相鄰的同類物品，群組越大分數越高。" },
@@ -24,8 +32,44 @@ const STORAGE = "match-island-records-v1";
 let records = {};
 try { const data = JSON.parse(localStorage.getItem(STORAGE)); if (data && typeof data === "object") records = data; } catch { /* Storage is optional. */ }
 let state, theme = 0, epoch = 0, soundOn = false, audio, dragStart = null, suppressClick = false;
-const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+const activeAnimations = new Set(), resumeWaiters = new Set();
+const tileParts = [], trayParts = [];
+let recordSaveTimer = null, recordsDirty = false, comboAnimation = null;
 const format = n => n.toLocaleString("zh-TW");
+function resumePending() {
+  resumeWaiters.forEach(resolve => resolve()); resumeWaiters.clear();
+}
+async function motionReady(token) {
+  if (token !== epoch || state.ended) return false;
+  if (state.paused) await new Promise(resolve => resumeWaiters.add(resolve));
+  return token === epoch && !state.ended;
+}
+function stopAnimations() {
+  activeAnimations.forEach(animation => animation.cancel());
+  activeAnimations.clear(); comboAnimation = null; resumePending();
+}
+async function animateTiles(entries, duration, token) {
+  if (!await motionReady(token)) return false;
+  if (reducedMotion.matches || !entries.length) return true;
+  const animations = [];
+  for (const { node, frames } of entries) {
+    if (typeof node.animate !== "function") continue;
+    const animation = node.animate(frames, { duration, easing: "cubic-bezier(.2,.7,.25,1)" });
+    activeAnimations.add(animation); animations.push(animation);
+    if (state.paused) animation.pause();
+  }
+  await Promise.all(animations.map(animation => animation.finished.catch(() => {})));
+  animations.forEach(animation => activeAnimations.delete(animation));
+  return motionReady(token);
+}
+function animateSwap(a, b, token) {
+  const first = tileParts[a].button, second = tileParts[b].button;
+  const dx = second.offsetLeft - first.offsetLeft, dy = second.offsetTop - first.offsetTop;
+  return animateTiles([
+    { node: first, frames: [{ transform: `translate(${dx}px,${dy}px)` }, { transform: "translate(0,0)" }] },
+    { node: second, frames: [{ transform: `translate(${-dx}px,${-dy}px)` }, { transform: "translate(0,0)" }] }
+  ], 90, token);
+}
 function shuffled(items) {
   const result = [...items];
   for (let i = result.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [result[i], result[j]] = [result[j], result[i]]; }
@@ -45,13 +89,22 @@ function beep(combo = 1) {
 function saveRecord() {
   if (state.score <= (Number(records[state.mode]) || 0)) return;
   records[state.mode] = state.score;
-  try { localStorage.setItem(STORAGE, JSON.stringify(records)); } catch { $("save-note").textContent = "此瀏覽器無法儲存紀錄，遊戲仍可繼續"; }
+  recordsDirty = true;
+  if (recordSaveTimer === null) recordSaveTimer = setTimeout(flushRecords, 600);
+}
+function flushRecords() {
+  clearTimeout(recordSaveTimer); recordSaveTimer = null;
+  if (!recordsDirty) return;
+  try { localStorage.setItem(STORAGE, JSON.stringify(records)); recordsDirty = false; }
+  catch { $("save-note").textContent = "此瀏覽器無法儲存紀錄，遊戲仍可繼續"; }
 }
 function newGame(mode = state?.mode || "classic") {
+  flushRecords();
   epoch++;
+  stopAnimations();
   dragStart = null; suppressClick = false;
   const config = MODES[mode];
-  state = { mode, board: E.create(), score: 0, moves: config.moves, tray: [], remaining: 90, started: false, deadline: 0, paused: false, ended: false, busy: false, selected: null, hinted: [], hammer: false, created: 0, detonated: 0, maxChain: 0, tools: { hint: 3, shuffle: 2, hammer: 3 } };
+  state = { mode, board: E.create(), score: 0, moves: config.moves, tray: [], remaining: 90, started: false, deadline: 0, paused: false, ended: false, busy: false, swapMotion: null, selected: null, hinted: [], hammer: false, created: 0, detonated: 0, maxChain: 0, tools: { hint: 3, shuffle: 2, hammer: 3 } };
   if (mode === "triple") {
     // Every item belongs to a complete triple, so the board is always solvable.
     state.board = shuffled(Array.from({ length: 60 }, (_, i) => ({ type: Math.floor(i / 3) % 6, special: null })));
@@ -75,42 +128,66 @@ function newGame(mode = state?.mode || "classic") {
 }
 function render() {
   const t = THEMES[theme];
-  const focus = document.activeElement?.closest("#board [data-index]")?.dataset.index;
-  const preview = state.selected !== null && state.board[state.selected]?.special ? E.expand(state.board, [state.selected]) : [];
-  $("board").innerHTML = state.board.map((tile, i) => {
+  if (!tileParts.length) {
+    const fragment = document.createDocumentFragment();
+    for (let i = 0; i < E.SIZE * E.SIZE; i++) {
+      const button = document.createElement("button"), object = document.createElement("span"), badge = document.createElement("span");
+      button.className = "tile"; button.dataset.index = i;
+      object.className = "tile-object"; badge.className = "power-badge"; badge.setAttribute("aria-hidden", "true");
+      button.append(object, badge); fragment.append(button); tileParts.push({ button, object, badge, content: "" });
+    }
+    $("board").replaceChildren(fragment);
+    for (let i = 0; i < 7; i++) { const slot = document.createElement("span"); $("tray").append(slot); trayParts.push(slot); }
+  }
+  const preview = !state.busy && !state.paused && !state.ended && state.selected !== null && state.board[state.selected]?.special ? E.expand(state.board, [state.selected]) : [];
+  const range = new Set(preview), hints = new Set(state.hinted);
+  state.board.forEach((tile, i) => {
     const power = POWERUPS[tile?.special];
-    return `<button class="tile${!tile ? " empty" : ""}${state.selected === i ? " selected" : ""}${state.hinted.includes(i) ? " hinted" : ""}${preview.includes(i) ? " in-range" : ""}${power ? ` special ${tile.special}` : ""}" style="--tile-bg:${tile ? COLORS[tile.type] : "transparent"}" data-index="${i}" aria-label="第 ${Math.floor(i / 8) + 1} 列，第 ${i % 8 + 1} 格${tile ? `，${t.names[tile.type]}${power ? `，${power.name}，${power.desc}` : ""}` : "，空格"}" ${!tile || state.paused || state.ended || state.busy ? "disabled" : ""}>${tile ? `<span class="tile-object">${tile.special === "rainbow" ? "🌈" : t.items[tile.type]}</span>${power ? `<span class="power-badge" aria-hidden="true">${power.icon}</span>` : ""}` : ""}</button>`;
-  }).join("");
-  if (focus !== undefined && !$("board").children[focus]?.disabled) $("board").children[focus]?.focus({ preventScroll: true });
+    const part = tileParts[i], content = `${theme}:${tile?.type}:${tile?.special}`;
+    if (part.content !== content) {
+      part.content = content;
+      setText(part.object, tile ? tile.special === "rainbow" ? "🌈" : t.items[tile.type] : "");
+      setText(part.badge, power?.icon || ""); part.badge.hidden = !power || tile.special === "rainbow";
+      part.button.style.setProperty("--tile-bg", tile ? COLORS[tile.type] : "transparent");
+      part.button.setAttribute("aria-label", `第 ${Math.floor(i / 8) + 1} 列，第 ${i % 8 + 1} 格${tile ? `，${t.names[tile.type]}${power ? `，${power.name}，${power.desc}` : ""}` : "，空格"}`);
+    }
+    const classes = `tile${!tile ? " empty" : ""}${state.selected === i ? " selected" : ""}${hints.has(i) ? " hinted" : ""}${range.has(i) ? " in-range" : ""}${power ? ` special ${tile.special}` : ""}`;
+    if (part.button.className !== classes) part.button.className = classes;
+    setDisabled(part.button, !tile || state.paused || state.ended || state.busy);
+  });
   $("power-preview").hidden = !preview.length || state.paused || state.ended || state.busy;
   if (preview.length) {
     const tile = state.board[state.selected], power = POWERUPS[tile.special];
-    $("preview-name").textContent = `${power.icon} ${power.name}`;
-    $("preview-detail").textContent = `${power.desc} · 含連鎖預計 ${preview.length} 格`;
+    setText($("preview-name"), `${power.icon} ${power.name}`);
+    setText($("preview-detail"), `${power.desc} · 含連鎖預計 ${preview.length} 格`);
   }
   $("power-legend").hidden = !["classic", "timed"].includes(state.mode);
   $("round-summary").hidden = !["classic", "timed"].includes(state.mode);
-  $("board").classList.toggle("hammer-mode", state.hammer);
+  setClass($("board"), "hammer-mode", state.hammer);
+  const busy = String(state.busy);
+  if ($("board").getAttribute("aria-busy") !== busy) $("board").setAttribute("aria-busy", busy);
   $("tray").hidden = state.mode !== "triple";
-  $("tray").innerHTML = Array.from({ length: 7 }, (_, i) => `<span>${state.tray[i] !== undefined ? t.items[state.tray[i]] : ""}</span>`).join("");
+  trayParts.forEach((slot, i) => setText(slot, state.tray[i] !== undefined ? t.items[state.tray[i]] : ""));
   updateStats();
 }
 function updateStats() {
-  $("score").textContent = format(state.score);
-  $("best").textContent = format(Number(records[state.mode]) || 0);
-  $("resource").textContent = state.mode === "timed" ? Math.ceil(state.remaining) : state.mode === "triple" ? state.board.filter(Boolean).length : state.moves;
-  $("goal-progress").style.width = `${state.mode === "triple" ? (60 - state.board.filter(Boolean).length) / 60 * 100 : Math.min(100, state.score / MODES[state.mode].target * 100)}%`;
+  setText($("score"), format(state.score));
+  setText($("best"), format(Number(records[state.mode]) || 0));
+  setText($("resource"), state.mode === "timed" ? Math.ceil(state.remaining) : state.mode === "triple" ? state.board.filter(Boolean).length : state.moves);
+  const progress = `${state.mode === "triple" ? (60 - state.board.filter(Boolean).length) / 60 * 100 : Math.min(100, state.score / MODES[state.mode].target * 100)}%`;
+  if ($("goal-progress").style.width !== progress) $("goal-progress").style.width = progress;
   for (const tool of ["hint", "shuffle", "hammer"]) {
-    $(tool + "-count").textContent = state.tools[tool];
-    $(tool).disabled = state.ended || state.paused || state.busy || !state.tools[tool];
+    setText($(tool + "-count"), state.tools[tool]);
+    setDisabled($(tool), state.ended || state.paused || state.busy || !state.tools[tool]);
   }
-  $("hammer").classList.toggle("armed", state.hammer);
-  $("made-count").textContent = state.created;
-  $("chain-count").textContent = state.maxChain;
-  $("blast-count").textContent = state.detonated;
-  $("pause").disabled = state.ended;
-  $("pause").textContent = state.paused ? "▷" : "Ⅱ";
-  $("pause").setAttribute("aria-label", state.paused ? "繼續遊戲" : "暫停遊戲");
+  setClass($("hammer"), "armed", state.hammer);
+  setText($("made-count"), state.created);
+  setText($("chain-count"), state.maxChain);
+  setText($("blast-count"), state.detonated);
+  setDisabled($("pause"), state.ended);
+  setText($("pause"), state.paused ? "▷" : "Ⅱ");
+  const pauseLabel = state.paused ? "繼續遊戲" : "暫停遊戲";
+  if ($("pause").getAttribute("aria-label") !== pauseLabel) $("pause").setAttribute("aria-label", pauseLabel);
 }
 function startClock() {
   if (!state.started) {
@@ -125,7 +202,7 @@ function showOverlay(icon, title, text, label) {
 }
 function endGame(won) {
   state.ended = true; state.busy = false; state.selected = null;
-  saveRecord(); render();
+  saveRecord(); flushRecords(); stopAnimations(); render();
   showOverlay(won ? "🏝️" : "🌱", won ? "太棒了，小島任務完成！" : "休息一下，再挑戰一次。", `本局得到 ${format(state.score)} 分\n${state.created ? `製造 ${state.created} 顆道具 · 最高 ${state.maxChain} 連鎖\n` : ""}${won ? "你又收集了一份好心情。" : state.mode === "triple" ? "收納槽滿了。下次試著先湊齊槽內的物品！" : "每一局都是新的可能，你一定能找到更好的連鎖。"}`, "再來一局 →");
 }
 function checkEnd() {
@@ -140,7 +217,18 @@ function checkEnd() {
 function flourish(n, combo, label = "") {
   if (label || combo > 1 || n >= 5) {
     $("combo").textContent = label || (combo > 1 ? `連鎖 ×${combo} !` : `${n} 個一起消！`);
-    $("combo").classList.remove("show"); void $("combo").offsetWidth; $("combo").classList.add("show");
+    if (comboAnimation) { comboAnimation.cancel(); activeAnimations.delete(comboAnimation); }
+    if (!reducedMotion.matches && typeof $("combo").animate === "function") {
+      comboAnimation = $("combo").animate([
+        { opacity: 0, transform: "translateY(8px) scale(.85)" },
+        { opacity: 1, transform: "translateY(0) scale(1)", offset: .2 },
+        { opacity: 1, transform: "translateY(0) scale(1)", offset: .65 },
+        { opacity: 0, transform: "translateY(-20px) scale(1)" }
+      ], { duration: 650, easing: "ease-out" });
+      const animation = comboAnimation;
+      activeAnimations.add(animation);
+      animation.finished.catch(() => {}).finally(() => activeAnimations.delete(animation));
+    }
   }
   beep(combo);
 }
@@ -152,18 +240,23 @@ async function clearCells(cells, combo, token, creations = [], blast = false, la
   state.score += blast ? expanded.length ** 2 * 10 : expanded.length * 30 * combo;
   state.maxChain = Math.max(state.maxChain, combo);
   state.detonated += expanded.filter(i => state.board[i]?.special).length;
-  expanded.forEach(i => $("board").children[i]?.classList.add("clearing"));
-  flourish(expanded.length, combo, label); saveRecord(); updateStats();
-  await wait(190);
-  while (token === epoch && state.paused && !state.ended) await wait(100);
-  if (token !== epoch || state.ended) return false;
+  saveRecord(); updateStats();
+  const movement = state.swapMotion; state.swapMotion = null;
+  if (movement && !await movement) return false;
+  if (!await motionReady(token)) return false;
+  flourish(expanded.length, combo, label);
+  const cleared = expanded.map(i => ({ node: tileParts[i].button, frames: [{ transform: "scale(1)", opacity: 1 }, { transform: "scale(.2)", opacity: 0 }] }));
+  if (!await animateTiles(cleared, combo > 2 ? 75 : 90, token)) return false;
   expanded.forEach(i => state.board[i] = null);
   for (const creation of creations) state.board[creation.i] = { type: creation.type, special: creation.special };
   state.created += creations.length;
-  E.refill(state.board); render();
-  await wait(120);
-  while (token === epoch && state.paused && !state.ended) await wait(100);
-  return token === epoch && !state.ended;
+  const motions = [];
+  E.refill(state.board, Math.random, motions); render();
+  const pitch = tileParts[8].button.offsetTop - tileParts[0].button.offsetTop;
+  return animateTiles(motions.map(({ i, rows }) => ({
+    node: tileParts[i].button,
+    frames: [{ transform: `translateY(${-rows * pitch}px)`, opacity: .45 }, { transform: "translateY(0)", opacity: 1 }]
+  })), combo > 2 ? 100 : 130, token);
 }
 async function settle(token, initial = null, preferred = null, label = "", resolved = false) {
   let combo = 1;
@@ -182,6 +275,7 @@ async function settle(token, initial = null, preferred = null, label = "", resol
   }
   if (token !== epoch || state.ended) return;
   state.busy = false;
+  flushRecords();
   if (!checkEnd()) {
     if (!E.move(state.board, state.mode).length) { state.board = E.create(); $("status").textContent = "沒有可行操作，已免費替你重新排列！"; }
     else $("status").textContent = combo > 2 ? `漂亮！完成 ${combo - 1} 次連鎖。繼續收集快樂吧。` : MODES[state.mode].instruction;
@@ -195,6 +289,7 @@ async function swap(a, b) {
   const token = epoch;
   [state.board[a], state.board[b]] = [state.board[b], state.board[a]];
   render();
+  state.swapMotion = animateSwap(a, b, token);
   const combined = E.combination(state.board, a, b);
   const specialAt = state.board[a].special ? a : state.board[b].special ? b : null;
   if (specialAt !== null) {
@@ -207,10 +302,11 @@ async function swap(a, b) {
   }
   if (!E.matches(state.board).cells.length) {
     $("status").textContent = "這次沒有連成三個，已換回；不扣步數。";
-    await wait(220);
-    while (token === epoch && state.paused && !state.ended) await wait(100);
-    if (token !== epoch || state.ended) return;
+    const movement = state.swapMotion; state.swapMotion = null;
+    if (!await movement || !await motionReady(token)) return;
     [state.board[a], state.board[b]] = [state.board[b], state.board[a]];
+    render();
+    if (!await animateSwap(a, b, token)) return;
     state.busy = false; render(); return;
   }
   if (state.mode !== "timed") state.moves--;
@@ -263,9 +359,13 @@ function togglePause() {
   if (!state.paused) {
     if (state.mode === "timed" && state.started) state.remaining = Math.max(0, (state.deadline - performance.now()) / 1000);
     state.paused = true;
+    activeAnimations.forEach(animation => animation.pause());
+    flushRecords();
     showOverlay("☕", "讓快樂，也休息一下。", "遊戲已暫停。準備好再繼續就行。", "繼續遊戲 →");
   } else {
     state.paused = false;
+    activeAnimations.forEach(animation => animation.play());
+    resumePending();
     if (state.mode === "timed" && state.started) state.deadline = performance.now() + state.remaining * 1000;
     $("overlay").hidden = true;
   }
@@ -309,12 +409,14 @@ $("board").onclick = event => {
   if (tile) activate(Number(tile.dataset.index));
 };
 $("board").onpointerdown = event => {
+  if (event.isPrimary === false || event.button !== 0 || state.busy || state.paused || state.ended) return;
   suppressClick = false;
   const tile = event.target.closest("[data-index]");
-  dragStart = tile ? { i: Number(tile.dataset.index), x: event.clientX, y: event.clientY } : null;
+  dragStart = tile ? { i: Number(tile.dataset.index), x: event.clientX, y: event.clientY, pointerId: event.pointerId } : null;
+  if (tile) tile.setPointerCapture(event.pointerId);
 };
 $("board").onpointerup = event => {
-  if (!dragStart) return;
+  if (!dragStart || dragStart.pointerId !== event.pointerId) return;
   const start = dragStart; dragStart = null;
   if (!["classic", "timed"].includes(state.mode) || state.hammer || state.busy || state.paused || state.ended) return;
   const dx = event.clientX - start.x, dy = event.clientY - start.y;
@@ -323,7 +425,7 @@ $("board").onpointerup = event => {
   const next = start.i + (diagonal ? Math.sign(dx) + Math.sign(dy) * 8 : Math.abs(dx) > Math.abs(dy) ? Math.sign(dx) : Math.sign(dy) * 8);
   if (E.adjacent(start.i, next)) { suppressClick = true; swap(start.i, next); }
 };
-$("board").onpointercancel = () => { dragStart = null; };
+$("board").onpointercancel = event => { if (dragStart?.pointerId === event.pointerId) dragStart = null; };
 $("board").onkeydown = event => {
   if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
   const tile = event.target.closest("[data-index]"); if (!tile) return;
@@ -340,7 +442,8 @@ $("overlay-action").onclick = () => state.ended ? newGame() : togglePause();
 $("sound").onclick = () => { soundOn = !soundOn; $("sound").textContent = soundOn ? "♪" : "♫"; $("sound").setAttribute("aria-label", soundOn ? "關閉音效" : "開啟音效"); $("sound").setAttribute("aria-pressed", String(soundOn)); if (soundOn) beep(); };
 $("help").onclick = () => { if (!state.paused && !state.ended) togglePause(); $("help-dialog").showModal(); };
 $("close-help").onclick = $("help-play").onclick = () => $("help-dialog").close();
-document.addEventListener("visibilitychange", () => { if (document.hidden && state.started && !state.paused && !state.ended) togglePause(); });
+document.addEventListener("visibilitychange", () => { if (document.hidden) { flushRecords(); if (state.started && !state.paused && !state.ended) togglePause(); } });
+window.addEventListener("pagehide", flushRecords);
 setInterval(() => {
   if (state.mode !== "timed" || !state.started || state.paused || state.ended) return;
   state.remaining = Math.max(0, (state.deadline - performance.now()) / 1000); updateStats();

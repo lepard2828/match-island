@@ -1,5 +1,10 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700;800;900&display=swap');
 :root{--ink:#253e34;--muted:#819087;--green:#347657;--mint:#e5eee2;--paper:#f6f5ef;--line:#e2e6dc;--orange:#f0ac5e}
+.game-panel .board{overflow:hidden;contain:layout style}
+.board .tile{transition:box-shadow .12s ease}
+.board .tile:disabled{opacity:1;cursor:default}
+.board .tile:disabled:hover{transform:none}
+.tile .power-badge[hidden]{display:none}
 .version-pill{display:inline-flex;align-items:center;gap:13px;border:1px solid #d8e2c8;background:#edf2e4;border-radius:30px;padding:7px 8px 7px 13px;font-size:10px;color:#68805c;letter-spacing:.7px}
 .version-pill>span{background:#347657;color:#fff9d8;font-size:8px;font-weight:700;letter-spacing:1px;border-radius:20px;padding:4px 7px}
 .art-power>span{position:absolute;right:-9px;bottom:-5px;background:#fff3cc;border:3px solid #fffdf0;box-shadow:0 3px 8px #52664422;border-radius:50%;width:37px;height:37px;font-size:23px;display:grid;place-items:center;color:#4e875b}

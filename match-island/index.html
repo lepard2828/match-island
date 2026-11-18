@@ -6,9 +6,9 @@
   <meta name="theme-color" content="#f5f4ed">
   <meta name="description" content="消消小島第二版：全向三消、3 顆炸彈、4 顆十字火箭、5 顆彩虹球。四種免費玩法，手機電腦隨時玩。">
   <title>消消小島 2 · Match Island</title>
-  <link rel="stylesheet" href="style.css?v=2.0.0">
-  <script src="engine.js?v=2.0.0" defer></script>
-  <script src="app.js?v=2.0.0" defer></script>
+  <link rel="stylesheet" href="style.css?v=2.1.0">
+  <script src="engine.js?v=2.1.0" defer></script>
+  <script src="app.js?v=2.1.0" defer></script>
 </head>
 <body>
   <header class="header">
@@ -18,7 +18,7 @@
   </header>
   <main>
     <section class="intro">
-      <div><span class="version-pill">第二版・連鎖新登場 <span>V2.0</span></span><h1>小小連線，<br>引爆<span>大大快樂。</span><svg viewBox="0 0 330 16" aria-hidden="true"><path d="M4 10 Q130 -4 325 9"/></svg></h1><p>橫著消、直著消，斜著也能消。<br>3、4、5 顆連出新道具，讓驚喜一觸即發。</p><div class="intro-tags"><span>✦ 八方向交換</span><span>✦ 三種連線道具</span><span>✦ 四種玩法</span></div></div>
+      <div><span class="version-pill">流暢升級・連鎖不間斷 <span>V2.1</span></span><h1>小小連線，<br>引爆<span>大大快樂。</span><svg viewBox="0 0 330 16" aria-hidden="true"><path d="M4 10 Q130 -4 325 9"/></svg></h1><p>橫著消、直著消，斜著也能消。<br>3、4、5 顆連出新道具，讓驚喜一觸即發。</p><div class="intro-tags"><span>✦ 八方向交換</span><span>✦ 三種連線道具</span><span>✦ 四種玩法</span></div></div>
       <div class="island-art" aria-hidden="true"><span class="orbit o1">✦</span><span class="orbit o2">✧</span><div class="art-sticker">MORE MATCH<br><b>MORE JOY!</b></div><div class="art-tile t1">🍊</div><div class="art-tile t2 art-power">🍓<span>✚</span></div><div class="art-tile t3">🥝</div><div class="art-tile t4 art-power">🍋<span>💣</span></div><div class="art-tile t5">🌈</div><div class="art-caption">3 MATCH · 4 MATCH · 5 MATCH · BOOM!</div></div>
     </section>
     <section id="play" class="play-section">
@@ -32,8 +32,8 @@
           <div class="personal"><span>✧ 你的小島紀錄</span><strong id="best">0</strong><small>目前模式最高分 · 自動儲存</small></div>
         </aside>
         <section class="game-panel" aria-label="消除遊戲">
-          <div class="game-top"><div><span class="mini-label" id="mode-eyebrow">CLASSIC MATCH</span><h3 id="game-title">經典三消</h3></div><div class="game-controls"><button id="sound" aria-label="開啟音效" title="音效">♫</button><button id="pause" aria-label="暫停遊戲" title="暫停">Ⅱ</button><button id="restart" aria-label="重新開始" title="重新開始">↻</button></div></div>
-          <div class="stats"><div><span>目前得分</span><strong id="score">0</strong></div><div><span id="resource-label">剩餘步數</span><strong id="resource">24</strong></div><div><span>本局目標</span><strong id="target">1,800</strong></div></div>
+          <div class="game-top"><div><span class="mini-label" id="mode-eyebrow">OMNI MATCH · V2</span><h3 id="game-title">全向三消</h3></div><div class="game-controls"><button id="sound" aria-label="開啟音效" title="音效">♫</button><button id="pause" aria-label="暫停遊戲" title="暫停">Ⅱ</button><button id="restart" aria-label="重新開始" title="重新開始">↻</button></div></div>
+          <div class="stats"><div><span>目前得分</span><strong id="score">0</strong></div><div><span id="resource-label">剩餘步數</span><strong id="resource">24</strong></div><div><span>本局目標</span><strong id="target">4,200</strong></div></div>
           <div class="goal-track"><div id="goal-progress"></div></div>
           <div id="power-legend" class="power-legend" aria-label="手動連線道具規則"><span><b>3</b> 💣 小炸彈</span><span><b>4</b> ✚ 十字火箭</span><span><b>5+</b> 🌈 彩虹球</span></div>
           <div class="board-wrap"><div id="board" class="board" aria-label="消除棋盤"></div><div id="overlay" class="overlay" hidden><span id="overlay-icon">✦</span><h3 id="overlay-title"></h3><p id="overlay-text"></p><button id="overlay-action" class="primary">繼續遊戲 →</button></div><div id="combo" class="combo" aria-hidden="true"></div></div>
@@ -62,7 +62,7 @@
     </section>
     <section id="modes" class="discovery"><div class="section-title"><div><span class="eyebrow">MORE WAYS TO SMILE</span><h2>一座小島，不只一種樂趣。</h2></div><span class="section-note">找到你的命定玩法</span></div><div id="discovery-cards" class="discovery-cards"></div></section>
   </main>
-  <footer><a class="footer-brand" href="./">✿ 消消小島 2</a><span>給日常一點空白，給快樂一點空間。</span><small><a href="https://github.com/lepard2828/match-island/issues" target="_blank" rel="noopener noreferrer">問題與建議 ↗</a> · V2.0.0</small></footer>
+  <footer><a class="footer-brand" href="./">✿ 消消小島 2</a><span>給日常一點空白，給快樂一點空間。</span><small><a href="https://github.com/lepard2828/match-island/issues" target="_blank" rel="noopener noreferrer">問題與建議 ↗</a> · V2.1.0</small></footer>
   <dialog id="help-dialog"><button id="close-help" class="close" aria-label="關閉說明">✕</button><span class="eyebrow">WELCOME TO ISLAND 2.0</span><h2>這次，往每個方向找快樂。</h2><p><strong>全向三消：</strong>點選或滑動交換八方向相鄰物品；橫、直、兩種斜向連成三個以上都會消除。24 步內達成 4,200 分。</p><p><strong>3／4／5 顆的驚喜：</strong>有效交換的每組獨立連線生成一顆道具：3 顆小炸彈（3×3）、4 顆十字火箭（整列＋整行）、5 顆以上彩虹球（全盤同類）。相交連線只取最強一顆；自動掉落連鎖只加分，不重複生成。</p><p><strong>怎麼引爆？</strong>點一下道具預覽亮起範圍，再點一次或按「引爆」就能免費發動。與普通物品交換可引爆；彩虹球會消除交換物品的顏色，交換會扣一步。爆破碰到其他道具會自動引爆。</p><p><strong>道具組合：</strong>交換兩顆道具（扣一步）可合體。雙炸彈擴大到兩顆周圍 5×5、雙火箭雙十字、炸彈＋火箭清三列三行；彩虹＋炸彈／火箭讓同色物品一起爆破；雙彩虹清全盤。</p><p><strong>群組消除：</strong>點選兩個以上上下左右相連的同類物品，20 步內達成 2,400 分。<strong>收納三消：</strong>七格收納槽，三個同類就消除，清空 60 個物品獲勝，七格滿即失敗。</p><p><strong>限時衝分：</strong>全向三消規則，90 秒內達成 6,000 分。首個操作才計時，可暫停，切換分頁也會自動暫停。</p><p>提示標出可行操作；洗牌重建棋盤（包含未使用道具），收納模式只重排位置；小槌子直接消除一格並引爆碰到的道具。切換模式會開始新局，切換主題不影響進度。</p><button id="help-play" class="primary">知道了，來玩吧 →</button></dialog>
 </body>
 </html>
