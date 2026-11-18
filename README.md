@@ -3,6 +3,14 @@
 原創繁體中文消除網頁遊戲，以休閒消除遊戲集合為靈感，不複製參考網站的素材或程式碼。
 原生 HTML、CSS、JavaScript，免建置、無後端、無登入或付費功能。
 
+## 公開遊玩
+
+- 正式網址：https://lepard2828.github.io/match-island/
+- 原始碼：https://github.com/lepard2828/match-island
+- 問題與建議：https://github.com/lepard2828/match-island/issues
+
+由 GitHub Pages 雲端託管，不需要開發者的電腦保持開機。最高分留在各玩家自己的瀏覽器。
+
 ## 開始遊玩
 
 直接開啟本資料夾的 `index.html`，或在專案根目錄執行：
@@ -49,14 +57,22 @@ python match-island/test_browser.py
 
 ## 部署
 
-已備妥 GitHub Pages 自動測試與部署工作流程，以及 Cloudflare Pages 手動上傳用的打包工具。完整操作、網址規劃及持續改進流程見 `DEPLOYMENT.md`。
+已啟用 GitHub Pages 自動測試與部署工作流程，以及 Cloudflare Pages 手動上傳用的打包工具。完整操作與持續改進流程見 [部署文件](https://github.com/lepard2828/match-island/blob/main/match-island/DEPLOYMENT.md)。
 
 ```powershell
 python match-island/build_release.py
 ```
 
-產出 `match-island/dist/site/` 與 `match-island/dist/match-island.zip`，只包含四個公開網站檔案。雲端部署成功後，開發者電腦關機不影響大家遊玩。目前尚未建立真正公開網址，需先完成平台帳號與專案設定。
+產出 `match-island/dist/site/` 與 `match-island/dist/match-island.zip`，只包含四個公開網站檔案。推送正式分支後，測試通過才更新公開網站；Pull Request 只測試，不發布。
 
 現有根目錄 `public_server.py` 為舊遊戲專用白名單伺服器，不會公開本遊戲。
 
-這是一版可玩的完整本機原型，目前沒有關卡地圖、排行榜伺服器、付費商店或多人連線。
+這是一版已公開的單人網頁遊戲，目前沒有關卡地圖、排行榜伺服器、付費商店或多人連線。
+
+驗證公開網站可設定測試網址後執行同一套測試：
+
+```powershell
+$env:MATCH_ISLAND_URL = "https://lepard2828.github.io/match-island/"
+python match-island/test_browser.py
+Remove-Item Env:MATCH_ISLAND_URL
+```

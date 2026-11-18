@@ -1,0 +1,27 @@
+# Local Python caches and environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editor and OS metadata
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Generated logs and browser artifacts
+*.log
+screenshots/
+test-results/
+playwright-report/
+
+# Generated Match Island deployment packages
+/match-island/dist/
